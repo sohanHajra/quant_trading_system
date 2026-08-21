@@ -271,11 +271,16 @@ def run_walk_forward(
             initial_capital=INITIAL_CAPITAL,
         )
         
+        #added position column to the oos_returns DataFrame to keep track of the position during the out-of-sample period
+        #added close column to the oos_returns DataFrame to keep track of the close price during the out-of-sample period
+        
         oos_returns.append(
             test_backtest[
                 [
                     "timestamp",
+                    "close",
                     "strategy_return",
+                    "position",
                 ]
             ].copy()
         )
@@ -310,11 +315,15 @@ def run_walk_forward(
     # return (pd.DataFrame(fold_results), pd.concat(oos_returns, ignore_index=True))
     
     # more robust way to handle the case when there are no complete walk-forward windows
+    # added position column to the combined_oos DataFrame to keep track of the position during the out-of-sample period
+    #added close column to the combined_oos DataFrame to keep track of the close price during the out-of-sample period
     if not oos_returns:
         combined_oos = pd.DataFrame(
             columns=[
                 "timestamp",
+                "close",
                 "strategy_return",
+                "position",
             ]
         )
     else:
@@ -446,6 +455,9 @@ def main():
 
     combined_oos_drawdown = drawdown.min()
     
+    # calculating the exposure of the strategy during the out-of-sample period
+    exposure = (oos_returns["position"] != 0).mean()
+    
     
     #Results summary
     print(
@@ -521,6 +533,10 @@ def main():
         f"{combined_oos_drawdown:.2%}"
     )
     
+    print(
+        f"Strategy exposure: "
+        f"{exposure:.2%}"
+    )
 
 if __name__ == "__main__":
     main()
