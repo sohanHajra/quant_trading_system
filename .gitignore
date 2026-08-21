@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+
+.env
+.env.*
+
+data/raw/
+data/processed/
+
+.vscode/
+.ipynb_checkpoints/
+
+*.log
+
+data/market.duckdb

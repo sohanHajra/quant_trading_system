@@ -1,0 +1,89 @@
+import os
+from validate import validate_ohlcv
+from database import save_prices
+
+from datetime import datetime, timedelta, timezone
+
+import pandas as pd
+from dotenv import load_dotenv
+
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame
+from alpaca.data.enums import DataFeed
+
+
+
+load_dotenv()
+
+API_KEY = os.getenv("ALPACA_API_KEY")
+SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
+
+if not API_KEY or not SECRET_KEY:
+    raise ValueError("Alpaca API credentials are missing.")
+
+
+client = StockHistoricalDataClient(
+    API_KEY,
+    SECRET_KEY,
+)
+
+
+end = datetime.now(timezone.utc)
+start = end - timedelta(days=365*5)  # Last 5 years
+
+
+request = StockBarsRequest(
+    symbol_or_symbols="SPY",
+    timeframe=TimeFrame.Day,
+    start=start,
+    end=end,
+    feed=DataFeed.IEX,
+)
+
+
+
+bars = client.get_stock_bars(request)
+
+df = bars.df
+df = df.reset_index()
+
+# print("\nDataFrame columns:")
+# print(df.columns)
+
+# print("\nDataFrame index:")
+# print(df.index)
+
+# print("\nDataFrame shape:")
+# print(df.shape)
+
+print(f"\nReceived {len(df)} trading-day observations.")
+print(f"First observation: {df['timestamp'].min()}")
+print(f"Last observation:  {df['timestamp'].max()}")
+
+validate_ohlcv(df)
+
+save_prices(df)
+
+data_dir = "data/raw"
+os.makedirs(data_dir, exist_ok=True)
+
+file_path = f"{data_dir}/SPY_daily.csv"
+
+df.to_csv(file_path)
+
+print(f"\nSaved {len(df)} rows to {file_path}")
+
+
+df["return"] = df["close"].pct_change()
+
+print("\nDaily returns:")
+print(df["return"].tail())
+
+
+mean_return = df["return"].mean()
+volatility = df["return"].std()
+
+print(f"\nAverage daily return: {mean_return:.4%}")
+print(f"Daily volatility: {volatility:.4%}")
+
