@@ -18,7 +18,9 @@ def extract_trades(
 
     trades = []
 
+    # added entry index to keep track of the index of the entry point in the data DataFrame    
     in_trade = False
+    entry_index = None
     entry_date = None
     entry_price = None
 
@@ -34,8 +36,14 @@ def extract_trades(
         if not in_trade and position == 1:
 
             in_trade = True
+            entry_index = i
             entry_date = data.loc[i, "timestamp"]
             entry_price = price
+            entry_portfolio_value = (
+                data.loc[i - 1, "portfolio_value"]
+                if i > 0
+                else 100_000
+            )
 
         # ----------------------------------------------------
         # Exit
@@ -43,6 +51,7 @@ def extract_trades(
 
         elif in_trade and position == 0:
 
+            exit_index = i
             exit_date = data.loc[i, "timestamp"]
             exit_price = price
 
@@ -50,9 +59,32 @@ def extract_trades(
                 exit_price / entry_price
             ) - 1
 
+            portfolio_return = (
+                1 + data.loc[
+                    entry_index:exit_index,
+                    "strategy_return"
+                ]
+            ).prod() - 1
+
+            if entry_index == 0:
+                starting_portfolio = 100_000
+            else:
+                starting_portfolio = (
+                    data.loc[
+                        entry_index - 1,
+                        "portfolio_value"
+                    ]
+                )
+
+            portfolio_pnl = (
+                starting_portfolio
+                * portfolio_return
+            )
+
             holding_days = (
                 exit_date - entry_date
             ).days
+            
 
             trades.append(
                 {
@@ -61,12 +93,15 @@ def extract_trades(
                     "entry_price": entry_price,
                     "exit_price": exit_price,
                     "trade_return": trade_return,
+                    "portfolio_return": portfolio_return,
+                    "portfolio_pnl": portfolio_pnl,
                     "holding_days": holding_days,
                     "exit_reason": "signal",
                 }
             )
 
             in_trade = False
+            entry_index = None
             entry_date = None
             entry_price = None
 
@@ -76,6 +111,8 @@ def extract_trades(
 
     if in_trade:
 
+        exit_index = len(data) - 1
+
         exit_date = data.iloc[-1]["timestamp"]
         exit_price = data.iloc[-1]["close"]
 
@@ -83,9 +120,32 @@ def extract_trades(
             exit_price / entry_price
         ) - 1
 
+        portfolio_return = (
+            1 + data.loc[
+                entry_index:exit_index,
+                "strategy_return"
+            ]
+        ).prod() - 1
+
+        if entry_index == 0:
+            starting_portfolio = 100_000
+        else:
+            starting_portfolio = (
+                data.loc[
+                    entry_index - 1,
+                    "portfolio_value"
+                ]
+            )
+
+        portfolio_pnl = (
+            starting_portfolio
+            * portfolio_return
+        )
+
         holding_days = (
             exit_date - entry_date
         ).days
+        
 
         trades.append(
             {
@@ -94,6 +154,8 @@ def extract_trades(
                 "entry_price": entry_price,
                 "exit_price": exit_price,
                 "trade_return": trade_return,
+                "portfolio_return": portfolio_return,
+                "portfolio_pnl": portfolio_pnl,
                 "holding_days": holding_days,
                 "exit_reason": "end_of_sample",
             }
@@ -112,6 +174,57 @@ def main():
     if oos_data.empty:
         print("No OOS data available.")
         return
+    
+    # sort the OOS data chronologically
+    oos_data = (
+        oos_data
+        .sort_values("timestamp")
+        .reset_index(drop=True)
+        .copy()
+    )
+
+    # reconstruct one continuous OOS portfolio
+    oos_data["equity"] = (
+        1 + oos_data["strategy_return"]
+    ).cumprod()
+
+    oos_data["portfolio_value"] = (
+        100_000
+        * oos_data["equity"]
+    )
+    
+    # added this check to ensure that the portfolio value is not NaN at any point in the OOS data
+    # #--------------------------------------------------------
+    # print("\n========== PORTFOLIO VALUE DIAGNOSTIC ==========")
+
+    # print(
+    #     "NaN strategy returns:",
+    #     oos_data["strategy_return"].isna().sum()
+    # )
+
+    # print(
+    #     "NaN portfolio values:",
+    #     oos_data["portfolio_value"].isna().sum()
+    # )
+
+    # print(
+    #     "\nRows with NaN portfolio value:"
+    # )
+
+    # print(
+    #     oos_data[
+    #         oos_data["portfolio_value"].isna()
+    #     ][
+    #         [
+    #             "timestamp",
+    #             "strategy_return",
+    #             "position",
+    #             "portfolio_value",
+    #         ]
+    #     ].to_string(index=False)
+    # )
+    
+    #--------------------------------------------------------
 
     trades = extract_trades(oos_data)
 
@@ -164,7 +277,37 @@ def main():
         gross_profit / abs(gross_loss)
     )
     
+    total_trade_pnl = (
+        trades["portfolio_pnl"].sum()
+    )
+    
+    trades["pnl_contribution_pct"] = (
+        trades["portfolio_pnl"]
+        / total_trade_pnl
+    )
+    
+    winning_pnl = trades[
+        trades["portfolio_pnl"] > 0
+    ]["portfolio_pnl"]
 
+    top_5_winners = (
+        winning_pnl
+        .sort_values(ascending=False)
+        .head(5)
+        .sum()
+    )
+
+    total_winning_pnl = (
+        winning_pnl.sum()
+    )
+
+    top_5_contribution = (
+        top_5_winners
+        / total_winning_pnl
+    )
+    
+    
+    #--------------------------------------------------------
     print("\n========== TRADE ANALYSIS ==========")
 
     print(
@@ -223,6 +366,31 @@ def main():
     print(
         trades.to_string(index=False)
     )
+    
+    print("\n========== TRADE P&L SUMMARY ==========")
+    
+    print(
+        f"Total trade P&L: "
+        f"${total_trade_pnl:,.2f}"
+    )
+
+    print(
+        f"Top 5 winners gross P&L: "
+        f"${top_5_winners:,.2f}"
+    )
+
+    print(
+        f"Total winning trade P&L: "
+        f"${total_winning_pnl:,.2f}"
+    )
+
+    print(
+        f"Top 5 winners contribution "
+        f"to gross profit: "
+        f"{top_5_contribution:.2%}"
+    )
+    
+    
 
 
 if __name__ == "__main__":

@@ -250,6 +250,13 @@ def run_walk_forward(
                 COST_BPS,
             )
         )
+        
+        # The first OOS observation starts with a flat portfolio
+        # There is no prior OOS position, so there is no transaction cost
+        test_backtest.iloc[
+            0,
+            test_backtest.columns.get_loc("transaction_cost")
+        ] = 0.0
 
         test_backtest["strategy_return"] = (
             test_backtest["gross_return"]
@@ -281,6 +288,7 @@ def run_walk_forward(
                     "close",
                     "strategy_return",
                     "position",
+                    "portfolio_value",
                 ]
             ].copy()
         )
@@ -343,6 +351,23 @@ def main():
     df = load_market_data()
 
     results, oos_returns = run_walk_forward(df)
+    
+    # added to get the contribution of each fold to the overall out-of-sample performance
+    oos_data = (
+        oos_data
+        .sort_values("timestamp")
+        .reset_index(drop=True)
+        .copy()
+    )
+
+    oos_data["equity"] = (
+        1 + oos_data["strategy_return"]
+    ).cumprod()
+
+    oos_data["portfolio_value"] = (
+        100_000
+        * oos_data["equity"]
+    )
     
     #combined portfolio value calculation for the out-of-sample period
     oos_returns = (
