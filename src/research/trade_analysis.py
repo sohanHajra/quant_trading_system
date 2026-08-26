@@ -3,6 +3,9 @@ from src.research.walk_forward import (
     load_market_data,
     run_walk_forward,
 )
+from src.research.regime_analysis import (
+    add_regime_features,
+)
 
 
 def extract_trades(
@@ -39,6 +42,16 @@ def extract_trades(
             entry_index = i
             entry_date = data.loc[i, "timestamp"]
             entry_price = price
+            entry_regime = data.loc[
+                i,
+                "regime",
+            ]
+
+            entry_trend_strength = data.loc[
+                i,
+                "trend_strength",
+            ]
+                        
             entry_portfolio_value = (
                 data.loc[i - 1, "portfolio_value"]
                 if i > 0
@@ -52,6 +65,27 @@ def extract_trades(
         elif in_trade and position == 0:
 
             exit_index = i
+            
+            trade_trend_strength = (
+                data.loc[
+                    entry_index:exit_index,
+                    "trend_strength",
+                ]
+            )
+
+            average_trend_strength = (
+                trade_trend_strength.mean()
+            )
+            
+            average_regime = (
+                data.loc[
+                    entry_index:exit_index,
+                    "regime",
+                ]
+                .mode()
+                .iloc[0]
+            )
+            
             exit_date = data.loc[i, "timestamp"]
             exit_price = price
 
@@ -96,6 +130,10 @@ def extract_trades(
                     "portfolio_return": portfolio_return,
                     "portfolio_pnl": portfolio_pnl,
                     "holding_days": holding_days,
+                    "entry_regime": entry_regime,
+                    "entry_trend_strength": entry_trend_strength,
+                    "average_regime": average_regime,
+                    "average_trend_strength": average_trend_strength,
                     "exit_reason": "signal",
                 }
             )
@@ -157,6 +195,10 @@ def extract_trades(
                 "portfolio_return": portfolio_return,
                 "portfolio_pnl": portfolio_pnl,
                 "holding_days": holding_days,
+                "entry_regime": entry_regime,
+                "entry_trend_strength": entry_trend_strength,
+                "average_regime": average_regime,
+                "average_trend_strength": average_trend_strength,
                 "exit_reason": "end_of_sample",
             }
         )
@@ -191,6 +233,11 @@ def main():
     oos_data["portfolio_value"] = (
         100_000
         * oos_data["equity"]
+    )
+    
+    # add regime features to the OOS data
+    oos_data = add_regime_features(
+        oos_data
     )
     
     # added this check to ensure that the portfolio value is not NaN at any point in the OOS data
@@ -304,6 +351,115 @@ def main():
     top_5_contribution = (
         top_5_winners
         / total_winning_pnl
+    )
+    
+    # summarizing trades by entry regime
+    entry_regime_summary = (
+        trades
+        .groupby("entry_regime")
+        .agg(
+            trades=("trade_return", "count"),
+            win_rate=(
+                "trade_return",
+                lambda x: (x > 0).mean(),
+            ),
+            average_trade_return=(
+                "trade_return",
+                "mean",
+            ),
+            average_portfolio_return=(
+                "portfolio_return",
+                "mean",
+            ),
+            total_pnl=(
+                "portfolio_pnl",
+                "sum",
+            ),
+            average_holding_days=(
+                "holding_days",
+                "mean",
+            ),
+        )
+        .sort_values(
+            "total_pnl",
+            ascending=False,
+        )
+    )
+    
+    # summarizing trades by average regime during the trade, which is the most common regime during the trade
+    average_regime_summary = (
+        trades
+        .groupby("average_regime")
+        .agg(
+            trades=("trade_return", "count"),
+            win_rate=(
+                "trade_return",
+                lambda x: (x > 0).mean(),
+            ),
+            average_trade_return=(
+                "trade_return",
+                "mean",
+            ),
+            average_portfolio_return=(
+                "portfolio_return",
+                "mean",
+            ),
+            total_pnl=(
+                "portfolio_pnl",
+                "sum",
+            ),
+            average_holding_days=(
+                "holding_days",
+                "mean",
+            ),
+        )
+        .sort_values(
+            "total_pnl",
+            ascending=False,
+        )
+    )
+    
+    #--------------------------------------------------------
+    print(
+        "\n========== ENTRY REGIME SUMMARY =========="
+    )
+
+    print(
+        entry_regime_summary.to_string(
+            formatters={
+                "win_rate": "{:.2%}".format,
+                "average_trade_return": "{:.2%}".format,
+                "average_portfolio_return": "{:.2%}".format,
+                "total_pnl": "${:,.2f}".format,
+                "average_holding_days": "{:.1f}".format,
+            }
+        )
+    )
+    
+    print(
+        "\n========== DOMINANT REGIME SUMMARY =========="
+    )
+
+    print(
+        average_regime_summary.to_string(
+            formatters={
+                "win_rate": "{:.2%}".format,
+                "average_trade_return": "{:.2%}".format,
+                "average_portfolio_return": "{:.2%}".format,
+                "total_pnl": "${:,.2f}".format,
+                "average_holding_days": "{:.1f}".format,
+            }
+        )
+    )
+    
+    print(
+        "\nEntry regime P&L total: "
+        f"${entry_regime_summary['total_pnl'].sum():,.2f}"
+    )
+
+    print(
+        "Dominant regime P&L total: "
+        f"${average_regime_summary['total_pnl'].sum():,.2f}"
     )
     
     

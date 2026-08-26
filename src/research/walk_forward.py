@@ -229,6 +229,27 @@ def run_walk_forward(
             slow_window=best_params["slow_window"],
             cost_bps_per_side=COST_BPS,
         )
+        
+        fast_window = best_params["fast_window"]
+        slow_window = best_params["slow_window"]
+
+        test_backtest["fast_ma"] = (
+            test_backtest["close"]
+            .rolling(
+                window=fast_window,
+                min_periods=fast_window,
+            )
+            .mean()
+        )
+
+        test_backtest["slow_ma"] = (
+            test_backtest["close"]
+            .rolling(
+                window=slow_window,
+                min_periods=slow_window,
+            )
+            .mean()
+        )
 
         # Keep only the true out-of-sample period
         test_backtest = test_backtest[
@@ -281,17 +302,35 @@ def run_walk_forward(
         #added position column to the oos_returns DataFrame to keep track of the position during the out-of-sample period
         #added close column to the oos_returns DataFrame to keep track of the close price during the out-of-sample period
         
-        oos_returns.append(
-            test_backtest[
-                [
-                    "timestamp",
-                    "close",
-                    "strategy_return",
-                    "position",
-                    "portfolio_value",
-                ]
-            ].copy()
-        )
+        # oos_returns.append(
+        #     test_backtest[
+        #         [
+        #             "timestamp",
+        #             "close",
+        #             "strategy_return",
+        #             "position",
+        #             "portfolio_value",
+        #         ]
+        #     ].copy()
+        # )
+        
+        #----------------------------------------------------
+        oos_fold = test_backtest[
+            [
+                "timestamp",
+                "close",
+                "strategy_return",
+                "position",
+                "fast_ma",
+                "slow_ma",
+            ]
+        ].copy()
+
+        # preserve the parameters actually selected for this fold
+        oos_fold["fast_window"] = best_params["fast_window"]
+        oos_fold["slow_window"] = best_params["slow_window"]
+
+        oos_returns.append(oos_fold)
         
 
         fold_results.append(
@@ -332,6 +371,8 @@ def run_walk_forward(
                 "close",
                 "strategy_return",
                 "position",
+                "fast_window",
+                "slow_window",
             ]
         )
     else:
