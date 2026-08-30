@@ -21,7 +21,7 @@ def extract_trades(
 
     trades = []
 
-    # added entry index to keep track of the index of the entry point in the data DataFrame    
+    # added entry index to keep track of the index of the entry point in the data DataFrame
     in_trade = False
     entry_index = None
     entry_date = None
@@ -51,7 +51,7 @@ def extract_trades(
                 i,
                 "trend_strength",
             ]
-                        
+
             entry_portfolio_value = (
                 data.loc[i - 1, "portfolio_value"]
                 if i > 0
@@ -65,7 +65,7 @@ def extract_trades(
         elif in_trade and position == 0:
 
             exit_index = i
-            
+
             trade_trend_strength = (
                 data.loc[
                     entry_index:exit_index,
@@ -76,7 +76,7 @@ def extract_trades(
             average_trend_strength = (
                 trade_trend_strength.mean()
             )
-            
+
             average_regime = (
                 data.loc[
                     entry_index:exit_index,
@@ -85,7 +85,7 @@ def extract_trades(
                 .mode()
                 .iloc[0]
             )
-            
+
             exit_date = data.loc[i, "timestamp"]
             exit_price = price
 
@@ -118,7 +118,7 @@ def extract_trades(
             holding_days = (
                 exit_date - entry_date
             ).days
-            
+
 
             trades.append(
                 {
@@ -183,7 +183,7 @@ def extract_trades(
         holding_days = (
             exit_date - entry_date
         ).days
-        
+
 
         trades.append(
             {
@@ -216,7 +216,7 @@ def main():
     if oos_data.empty:
         print("No OOS data available.")
         return
-    
+
     # sort the OOS data chronologically
     oos_data = (
         oos_data
@@ -234,12 +234,12 @@ def main():
         100_000
         * oos_data["equity"]
     )
-    
+
     # add regime features to the OOS data
     oos_data = add_regime_features(
         oos_data
     )
-    
+
     # added this check to ensure that the portfolio value is not NaN at any point in the OOS data
     # #--------------------------------------------------------
     # print("\n========== PORTFOLIO VALUE DIAGNOSTIC ==========")
@@ -270,7 +270,7 @@ def main():
     #         ]
     #     ].to_string(index=False)
     # )
-    
+
     #--------------------------------------------------------
 
     trades = extract_trades(oos_data)
@@ -278,7 +278,64 @@ def main():
     if trades.empty:
         print("No trades found.")
         return
-    
+
+    flat_data = oos_data[
+        oos_data["position"] == 0
+    ].copy()
+
+    invested_data = oos_data[
+        oos_data["position"] != 0
+    ].copy()
+
+
+    #--------------------------------------------------------
+
+    # flat period analysis
+    flat_observations = len(flat_data)
+
+    flat_market_return = (
+        (1 + flat_data["market_return"])
+        .prod()
+        - 1
+    )
+
+    flat_positive_days = (
+        flat_data["market_return"] > 0
+    ).sum()
+
+    flat_negative_days = (
+        flat_data["market_return"] < 0
+    ).sum()
+
+    flat_positive_rate = (
+        flat_positive_days
+        / flat_observations
+    )
+
+    flat_negative_rate = (
+        flat_negative_days
+        / flat_observations
+    )
+
+    average_flat_day_return = (
+        flat_data["market_return"].mean()
+    )
+
+    flat_best_day = (
+        flat_data["market_return"].max()
+    )
+
+    flat_worst_day = (
+        flat_data["market_return"].min()
+    )
+
+    #--------------------------------------------------------
+
+    # invested period analysis
+    average_invested_day_return = (
+        invested_data["market_return"].mean()
+    )
+
     winning_trades = trades[
         trades["trade_return"] > 0
     ]
@@ -323,16 +380,16 @@ def main():
     profit_factor = (
         gross_profit / abs(gross_loss)
     )
-    
+
     total_trade_pnl = (
         trades["portfolio_pnl"].sum()
     )
-    
+
     trades["pnl_contribution_pct"] = (
         trades["portfolio_pnl"]
         / total_trade_pnl
     )
-    
+
     winning_pnl = trades[
         trades["portfolio_pnl"] > 0
     ]["portfolio_pnl"]
@@ -352,7 +409,7 @@ def main():
         top_5_winners
         / total_winning_pnl
     )
-    
+
     # summarizing trades by entry regime
     entry_regime_summary = (
         trades
@@ -385,7 +442,7 @@ def main():
             ascending=False,
         )
     )
-    
+
     # summarizing trades by average regime during the trade, which is the most common regime during the trade
     average_regime_summary = (
         trades
@@ -418,7 +475,7 @@ def main():
             ascending=False,
         )
     )
-    
+
     #--------------------------------------------------------
     print(
         "\n========== ENTRY REGIME SUMMARY =========="
@@ -435,7 +492,7 @@ def main():
             }
         )
     )
-    
+
     print(
         "\n========== DOMINANT REGIME SUMMARY =========="
     )
@@ -451,7 +508,7 @@ def main():
             }
         )
     )
-    
+
     print(
         "\nEntry regime P&L total: "
         f"${entry_regime_summary['total_pnl'].sum():,.2f}"
@@ -461,8 +518,8 @@ def main():
         "Dominant regime P&L total: "
         f"${average_regime_summary['total_pnl'].sum():,.2f}"
     )
-    
-    
+
+
     #--------------------------------------------------------
     print("\n========== TRADE ANALYSIS ==========")
 
@@ -480,7 +537,7 @@ def main():
         f"Losing trades: "
         f"{(trades['trade_return'] < 0).sum()}"
     )
-    
+
     print(
         f"Win rate: "
         f"{win_rate:.2%}"
@@ -522,9 +579,9 @@ def main():
     print(
         trades.to_string(index=False)
     )
-    
+
     print("\n========== TRADE P&L SUMMARY ==========")
-    
+
     print(
         f"Total trade P&L: "
         f"${total_trade_pnl:,.2f}"
@@ -545,8 +602,62 @@ def main():
         f"to gross profit: "
         f"{top_5_contribution:.2%}"
     )
-    
-    
+
+
+    #--------------------------------------------------------
+
+    print(
+        "\n========== FLAT PERIOD ANALYSIS =========="
+    )
+
+    print(
+        f"Flat observations: "
+        f"{flat_observations}"
+    )
+
+    print(
+        f"Flat exposure: "
+        f"{flat_observations / len(oos_data):.2%}"
+    )
+
+    print(
+        f"SPY compounded return "
+        f"on flat observations: "
+        f"{flat_market_return:.2%}"
+    )
+
+    print(
+        f"Average SPY return "
+        f"on flat days: "
+        f"{average_flat_day_return:.4%}"
+    )
+
+    print(
+        f"Average SPY return "
+        f"on invested days: "
+        f"{average_invested_day_return:.4%}"
+    )
+
+    print(
+        f"Positive SPY days while flat: "
+        f"{flat_positive_rate:.2%}"
+    )
+
+    print(
+        f"Negative SPY days while flat: "
+        f"{flat_negative_rate:.2%}"
+    )
+
+    print(
+        f"Best SPY day while flat: "
+        f"{flat_best_day:.2%}"
+    )
+
+    print(
+        f"Worst SPY day while flat: "
+        f"{flat_worst_day:.2%}"
+    )
+
 
 
 if __name__ == "__main__":

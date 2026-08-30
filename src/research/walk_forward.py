@@ -319,6 +319,7 @@ def run_walk_forward(
             [
                 "timestamp",
                 "close",
+                "market_return",
                 "strategy_return",
                 "position",
                 "fast_ma",
@@ -369,8 +370,11 @@ def run_walk_forward(
             columns=[
                 "timestamp",
                 "close",
+                "market_return",
                 "strategy_return",
                 "position",
+                "fast_ma",
+                "slow_ma",
                 "fast_window",
                 "slow_window",
             ]
