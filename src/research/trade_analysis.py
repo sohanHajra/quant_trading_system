@@ -240,37 +240,6 @@ def main():
         oos_data
     )
 
-    # added this check to ensure that the portfolio value is not NaN at any point in the OOS data
-    # #--------------------------------------------------------
-    # print("\n========== PORTFOLIO VALUE DIAGNOSTIC ==========")
-
-    # print(
-    #     "NaN strategy returns:",
-    #     oos_data["strategy_return"].isna().sum()
-    # )
-
-    # print(
-    #     "NaN portfolio values:",
-    #     oos_data["portfolio_value"].isna().sum()
-    # )
-
-    # print(
-    #     "\nRows with NaN portfolio value:"
-    # )
-
-    # print(
-    #     oos_data[
-    #         oos_data["portfolio_value"].isna()
-    #     ][
-    #         [
-    #             "timestamp",
-    #             "strategy_return",
-    #             "position",
-    #             "portfolio_value",
-    #         ]
-    #     ].to_string(index=False)
-    # )
-
     #--------------------------------------------------------
 
     trades = extract_trades(oos_data)
